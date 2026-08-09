@@ -1,16 +1,35 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import gsap from 'gsap'
 import AsciiText from './reference_components/AsciiText.jsx'
 import Counter from './reference_components/Counter.jsx'
 import ClickSpark from './reference_components/ClickSpark.jsx'
 import { StaggeredMenu } from './reference_components/StaggeredMenu.jsx'
 import ScrollReveal from './reference_components/ScrollReveal.jsx'
+import ElectricBorder from './reference_components/ElectricBorder.jsx'
+import Shuffle from './Shuffle/Shuffle.jsx'
 import subscriberData from '../../data/subscribers.json'
 import './App.css'
 import logoSrc from '@root/assets/Logo.jpg'
 
 const DomeGallery = lazy(() => import('./reference_components/DomeGallery.jsx'))
 const FlowingMenu = lazy(() => import('./reference_components/FlowingMenu.jsx'))
-const ParticleText = lazy(() => import('./reference_components/ParticleText.jsx'))
+
+function PlayIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M8 5.5v13l11-6.5z" />
+    </svg>
+  )
+}
+
+function LoadingScreen({ active }) {
+  return (
+    <div className={`loadingScreen ${active ? '' : 'loadingScreen--hidden'}`} role="status" aria-live="polite">
+      <span className="loadingScreen__ring" aria-hidden="true" />
+      <span className="loadingScreen__label">Loading the reel…</span>
+    </div>
+  )
+}
 
 const VIDEO_IDS = [
   'cpzfPTQvMP4',
@@ -27,46 +46,55 @@ const VIDEO_IDS = [
   'deTyjwxNAJ8'
 ]
 
+// Small original brand-color monogram badges — not the platforms' actual
+// logo artwork (which is trademarked), just a colored visual cue.
+function GumroadBadge({ className = '', ...rest }) {
+  return (
+    <span className={`brandBadge brandBadge--gumroad ${className}`} {...rest}>
+      G
+    </span>
+  )
+}
+
+function FiverrBadge({ className = '', ...rest }) {
+  return (
+    <span className={`brandBadge brandBadge--fiverr ${className}`} {...rest}>
+      fi
+    </span>
+  )
+}
+
+function CoffeeIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 9h13a3 3 0 0 1 0 6h-1" />
+      <path d="M4 9v7a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V9" />
+      <path d="M7 4c-.5 1 .5 1.5 0 3" />
+      <path d="M11 4c-.5 1 .5 1.5 0 3" />
+    </svg>
+  )
+}
+
 const SUPPORT_LINKS = [
   {
     title: 'Gumroad store',
     description: 'Own animation toolkits, presets, and motion art.',
-    url: 'https://medhianaffeti.gumroad.com/'
+    url: 'https://medhianaffeti.gumroad.com/',
+    icon: GumroadBadge
   },
   {
     title: 'Buy me a coffee',
     description: 'Support the channel and fuel the next motion experiment.',
-    url: 'https://medhianaffeti.gumroad.com/coffee'
+    url: 'https://medhianaffeti.gumroad.com/coffee',
+    icon: CoffeeIcon
   }
 ]
 
 const COMMISSIONS_URL = 'https://www.fiverr.com/s/wkaQl7o'
 
-// Simple original line icons (not the trademarked platform logos) so each
-// commission button reads clearly at a glance.
-function GigIcon(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <rect x="3" y="7" width="18" height="13" rx="2.5" />
-      <path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7" />
-      <path d="M3 12.5c2.8 1.4 5.8 2 9 2s6.2-.6 9-2" />
-    </svg>
-  )
-}
-
-function HandshakeIcon(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M3 11l4-4 5 3 3-2 6 4-3 3-3-2-3 3-6-3-3 2z" />
-      <path d="M8 10l4 4" />
-      <path d="M13 8l4 4" />
-    </svg>
-  )
-}
-
 // Add an Upwork entry here once you have the gig URL, e.g.
-// { name: 'Upwork', url: 'https://www.upwork.com/...', icon: HandshakeIcon }
-const COMMISSION_PLATFORMS = [{ name: 'Fiverr', url: COMMISSIONS_URL, icon: GigIcon }]
+// { name: 'Upwork', url: 'https://www.upwork.com/...', icon: SomeIcon }
+const COMMISSION_PLATFORMS = [{ name: 'Fiverr', url: COMMISSIONS_URL, icon: FiverrBadge }]
 
 // --- Responsive helpers -----------------------------------------------
 
@@ -164,9 +192,25 @@ function App() {
     }))
   )
   const [displayCount, setDisplayCount] = useState(0)
+  const [isReady, setIsReady] = useState(false)
+  const [showLoader, setShowLoader] = useState(true)
 
+  // Fetch real titles, preload every thumbnail so the gallery doesn't pop
+  // in piecemeal, and only then reveal the page.
   useEffect(() => {
-    const loadTitles = async () => {
+    let cancelled = false
+
+    const preloadImage = (src) =>
+      new Promise((resolve) => {
+        const img = new Image()
+        img.onload = resolve
+        img.onerror = resolve
+        img.src = src
+        // Safety net in case neither event fires (flaky network etc.)
+        window.setTimeout(resolve, 4000)
+      })
+
+    const run = async () => {
       const items = await Promise.all(
         VIDEO_IDS.map(async (id, index) => {
           const thumbnail = `https://img.youtube.com/vi/${id}/hqdefault.jpg`
@@ -182,18 +226,30 @@ function App() {
           } catch (error) {
             console.warn('Failed to fetch video title for', id, error)
           }
-          return {
-            id,
-            title,
-            thumbnail,
-            href: `https://www.youtube.com/watch?v=${id}`
-          }
+          return { id, title, thumbnail, href: `https://www.youtube.com/watch?v=${id}` }
         })
       )
+      if (cancelled) return
       setVideoItems(items)
+
+      const minDelay = new Promise((resolve) => window.setTimeout(resolve, 500))
+      await Promise.all([Promise.all(items.map((item) => preloadImage(item.thumbnail))), minDelay])
+      if (!cancelled) setIsReady(true)
     }
-    loadTitles()
+
+    run()
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  // Keep the loader mounted a little past isReady so its fade-out transition
+  // can actually play before it's removed from the DOM.
+  useEffect(() => {
+    if (!isReady) return
+    const t = window.setTimeout(() => setShowLoader(false), 520)
+    return () => window.clearTimeout(t)
+  }, [isReady])
 
   useEffect(() => {
     const t = window.setTimeout(() => setDisplayCount(subscriberData.subscriberCount), 80)
@@ -221,6 +277,27 @@ function App() {
       if (frame) window.cancelAnimationFrame(frame)
     }
   }, [reducedMotion])
+
+  // One-time GSAP intro timeline for the hero, first load only (per browser
+  // session — it won't replay on remounts within the same tab/session).
+  const heroRef = useRef(null)
+  useEffect(() => {
+    if (reducedMotion || !isReady || !heroRef.current) return
+    const alreadyPlayed = window.sessionStorage.getItem('heroIntroPlayed')
+    if (alreadyPlayed) return
+
+    const ctx = gsap.context(() => {
+      gsap.timeline({ defaults: { ease: 'power3.out' } })
+        .from('.js-hero-eyebrow', { opacity: 0, y: 16, duration: 0.6 })
+        .from('.js-hero-title', { opacity: 0, y: 26, duration: 0.9 }, '-=0.35')
+        .from('.js-hero-subtitle', { opacity: 0, y: 16, duration: 0.6 }, '-=0.5')
+        .from('.js-hero-stat', { opacity: 0, y: 16, duration: 0.5, stagger: 0.12 }, '-=0.35')
+        .from('.js-hero-panel', { opacity: 0, y: 20, scale: 0.97, duration: 0.7 }, '-=0.5')
+    }, heroRef)
+
+    window.sessionStorage.setItem('heroIntroPlayed', '1')
+    return () => ctx.revert()
+  }, [isReady, reducedMotion])
 
   const menuItems = useMemo(
     () => [
@@ -252,13 +329,19 @@ function App() {
   const latestVideo = videoItems[0]
 
   // Responsive prop tables for components whose sizing is driven by JS
-  // props rather than CSS (ascii/particle canvases, counter digits, dome).
-  const asciiProps = {
-    mobile: { asciiFontSize: 3, textFontSize: 150 },
-    tablet: { asciiFontSize: 5.4, textFontSize: 140 },
-    laptop: { asciiFontSize: 10, textFontSize: 180 },
-    desktop: { asciiFontSize: 5, textFontSize: 250 }
+  // props rather than CSS (particle/ascii canvases, counter digits, dome).
+  const titleParticleProps = {
+    mobile: { particleSize: 2.6, density: 4, fontSize: '54px' },
+    tablet: { particleSize: 2.8, density: 5, fontSize: '80px' },
+    laptop: { particleSize: 3.2, density: 5.5, fontSize: '108px' },
+    desktop: { particleSize: 3.6, density: 6, fontSize: '138px' }
   }[bucket]
+
+  const accentAsciiProps = {
+    tablet: { asciiFontSize: 2.8, textFontSize: 64 },
+    laptop: { asciiFontSize: 3.4, textFontSize: 84 },
+    desktop: { asciiFontSize: 4, textFontSize: 104 }
+  }[bucket] ?? { asciiFontSize: 2.8, textFontSize: 64 }
 
   const counterProps = {
     mobile: { fontSize: 34, padding: 6, gap: 6, horizontalPadding: 10 },
@@ -280,6 +363,8 @@ function App() {
 
   return (
     <div className="app">
+      {showLoader && <LoadingScreen active={!isReady} />}
+
       <StaggeredMenu
         position="right"
         logoUrl={logoSrc}
@@ -294,7 +379,7 @@ function App() {
       />
 
       <main className="page">
-        <section className="hero" id="hero">
+        <section className="hero" id="hero" ref={heroRef}>
           <div className="heroLayer" ref={heroLayerRef} />
           <div className="heroLayer heroLayer--soft" ref={heroLayerSoftRef} />
 
@@ -302,23 +387,30 @@ function App() {
             <div className="heroInner">
               <div className="heroContent">
                 <div className="heroCopy">
-                  <span className="eyebrow">Kinetic motion for bold ideas</span>
-                  <div className="heroTitle">
-                    <AsciiText
+                  <span className="eyebrow js-hero-eyebrow">Kinetic motion for bold ideas</span>
+                  <div className="heroTitle js-hero-title">
+                    <Shuffle
+                      key={bucket}
                       text="Dhia_anims"
-                      enableWaves={true}
-                      textColor="#ff3d47"
-                      planeBaseHeight={isMobile ? 4 : 5}
-                      {...asciiProps}
+                      className="heroShuffle"
+                      shuffleDirection="right"
+                      duration={0.45}
+                      maxDelay={0.2}
+                      loop={true}
+                      loopDelay={0.5}
+                      colorFrom="#ff3d47"
+                      colorTo="#ff3d47"
+                      textAlign="left"
+                      triggerOnHover={false}
                     />
                   </div>
-                  <p className="heroSubtitle">
+                  <p className="heroSubtitle js-hero-subtitle">
                     Stick-figure animator delivering kinetic motion design, playful storytelling, and fast-paced
                     visual ideas.
                   </p>
 
                   <div className="heroStats">
-                    <div className="statCard">
+                    <div className="statCard js-hero-stat">
                       <span className="statLabel">Subscribers</span>
                       <Counter
                         value={displayCount}
@@ -334,7 +426,7 @@ function App() {
                       />
                       <span className="statMeta">Updated {updatedAt}</span>
                     </div>
-                    <div className="statCard statCard--secondary">
+                    <div className="statCard statCard--secondary js-hero-stat">
                       <span className="statLabel">Videos posted</span>
                       <span className="statValue">{videoItems.length}</span>
                       <span className="statMeta">Motion shorts & experiments</span>
@@ -342,19 +434,21 @@ function App() {
                   </div>
                 </div>
 
-                <a className="heroVisual" href={latestVideo?.href} target="_blank" rel="noreferrer">
-                  <div
-                    className="heroPanel"
-                    style={{
-                      backgroundImage: latestVideo
-                        ? `linear-gradient(180deg, rgba(9,7,12,0.1) 0%, rgba(9,7,12,0.55) 55%, rgba(9,7,12,0.95) 100%), url(${latestVideo.thumbnail})`
-                        : undefined
-                    }}
-                  >
-                    <span className="heroPanelLabel">Latest drop</span>
-                    <span className="heroPanelText">{latestVideo?.title ?? 'New motion experiment'}</span>
-                    <span className="heroPanelCta">Watch on YouTube →</span>
-                  </div>
+                <a className="heroVisual js-hero-panel" href={latestVideo?.href} target="_blank" rel="noreferrer">
+                  <ElectricBorder color="#ff3d47" speed={1} chaos={0.12} thickness={2} style={{ borderRadius: 38 }}>
+                    <div
+                      className="heroPanel"
+                      style={{
+                        backgroundImage: latestVideo
+                          ? `linear-gradient(180deg, rgba(9,7,12,0.1) 0%, rgba(9,7,12,0.55) 55%, rgba(9,7,12,0.95) 100%), url(${latestVideo.thumbnail})`
+                          : undefined
+                      }}
+                    >
+                      <span className="heroPanelLabel">Latest drop</span>
+                      <span className="heroPanelText">{latestVideo?.title ?? 'New motion experiment'}</span>
+                      <span className="heroPanelCta">Watch on YouTube →</span>
+                    </div>
+                  </ElectricBorder>
                 </a>
               </div>
             </div>
@@ -363,17 +457,12 @@ function App() {
           {!isMobile && (
             <Suspense fallback={null}>
               <div className="heroAccent">
-                <ParticleText
+                <AsciiText
                   text="ANIMATOR"
-                  particleSize={isCompact ? 2 : 3}
-                  density={isCompact ? 3 : 5}
-                  color="#ff3d47"
-                  highlightColor="#ffffff"
-                  scatter={80}
-                  gatherDuration={1800}
-                  fontSize="clamp(3rem, 12vw, 8rem)"
-                  fontWeight={700}
-                  className="particleText"
+                  enableWaves={false}
+                  textColor="rgba(255,255,255,0.5)"
+                  planeBaseHeight={4}
+                  {...accentAsciiProps}
                 />
               </div>
             </Suspense>
@@ -398,7 +487,7 @@ function App() {
               <Suspense fallback={<div className="galleryFallback">Loading showcase…</div>}>
                 <DomeGallery
                   images={videoItems.map((item) => ({ src: item.thumbnail, alt: item.title }))}
-                  fit={1}
+                  fit={0.8}
                   fitBasis="min"
                   imageBorderRadius="20px"
                   openedImageBorderRadius="26px"
@@ -407,14 +496,21 @@ function App() {
                 />
               </Suspense>
             </Reveal>
-            <div className="videoGrid">
-              {videoItems.map((item, i) => (
-                <Reveal as="a" key={item.id} delay={i * 40} className="videoLink" href={item.href} target="_blank" rel="noreferrer">
-                  <span>{item.title}</span>
-                  <small>{item.id}</small>
-                </Reveal>
-              ))}
-            </div>
+            {isMobile && (
+              <div className="videoGrid">
+                {videoItems.map((item, i) => (
+                  <Reveal as="a" key={item.id} delay={i * 40} className="videoCard" href={item.href} target="_blank" rel="noreferrer">
+                    <span className="videoCardThumb">
+                      <img src={item.thumbnail} alt="" loading="lazy" />
+                      <span className="videoCardPlay">
+                        <PlayIcon />
+                      </span>
+                    </span>
+                    <span className="videoCardTitle">{item.title}</span>
+                  </Reveal>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -429,12 +525,18 @@ function App() {
             Support & store
           </ScrollReveal>
           <div className="ctaGrid">
-            {SUPPORT_LINKS.map((link, i) => (
-              <Reveal as="a" key={link.url} delay={i * 80} className="ctaCard" href={link.url} target="_blank" rel="noreferrer">
-                <span>{link.title}</span>
-                <p>{link.description}</p>
-              </Reveal>
-            ))}
+            {SUPPORT_LINKS.map((link, i) => {
+              const Icon = link.icon
+              return (
+                <Reveal as="a" key={link.url} delay={i * 80} className="ctaCard" href={link.url} target="_blank" rel="noreferrer">
+                  <span className="ctaCardHead">
+                    {Icon && <Icon className="ctaIcon" />}
+                    {link.title}
+                  </span>
+                  <p>{link.description}</p>
+                </Reveal>
+              )
+            })}
           </div>
           {!isMobile && (
             <Reveal className="flowingPanel">
@@ -496,18 +598,11 @@ function App() {
             Contact
           </ScrollReveal>
           <Reveal className="contactCard">
-            <div>
-              <p className="contactLead">Let’s animate your next campaign, brand sequence, or kinetic story.</p>
-              <p className="contactText">
-                Discord tag <strong>dhia0259</strong> — available for commissions, collabs, and custom motion work.
-              </p>
-            </div>
-            <div className="contactActions">
-              <a className="contactButton" href="mailto:hello@dhiaanims.com">
-                Email hello@dhiaanims.com
-              </a>
-              <span className="contactNote">Fast replies via Discord or email for briefs and bookings.</span>
-            </div>
+            <p className="contactLead">Let’s animate your next campaign, brand sequence, or kinetic story.</p>
+            <p className="contactText">
+              Discord tag <strong>dhia0259</strong> — available for commissions, collabs, and custom motion work. Fast
+              replies for briefs and bookings.
+            </p>
           </Reveal>
         </footer>
       </main>
