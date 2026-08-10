@@ -27,23 +27,11 @@ function getChannelUrl() {
   return channelUrl
 }
 
-function parseSubscriberText(text) {
-  const simpleMatch = /subscriberCountText\s*:\s*\{\s*simpleText\s*:\s*"([^"]+)"/i.exec(text)
-  if (simpleMatch) return simpleMatch[1]
-
-  const labelMatch = /subscriberCountText\s*:\s*\{[^}]*accessibility\s*:\s*\{[^}]*label\s*:\s*"([^"]+)"/i.exec(text)
-  if (labelMatch) return labelMatch[1]
-
-  const altMatch = /"subscriberCountText"\s*:\s*\{\s*"simpleText"\s*:\s*"([^"]+)"/i.exec(text)
-  if (altMatch) return altMatch[1]
-
-  return null
-}
-
 function parseCount(value) {
   if (!value) return null
 
-  const trimmed = value.replace(/subscribers?/i, '').trim()
+  // Normalize non-breaking spaces and the word "subscribers" out of the string.
+  const trimmed = value.replace(/\u00a0/g, ' ').replace(/subscribers?/i, '').trim()
   const normalized = trimmed.replace(/,/g, '').trim()
   const countMatch = /^([\d.]+)\s*([kKmMbBtT]?)/.exec(normalized)
   if (!countMatch) return null
@@ -62,20 +50,38 @@ function parseCount(value) {
   return unit ? Math.round(number * (multipliers[unit] ?? 1)) : Math.round(number)
 }
 
+// Multiple patterns, tried in order, since YouTube's channel-page markup has
+// changed shape more than once (legacy c4TabbedHeaderRenderer vs the newer
+// pageHeaderRenderer/pageHeaderViewModel layout) and can differ by locale or
+// A/B test. Matching directly against the raw HTML (rather than first trying
+// to isolate and JSON.parse a `ytInitialData` blob) avoids a lazy-regex
+// truncation bug where the blob gets cut off before the field we want.
+const SUBSCRIBER_PATTERNS = [
+  // Legacy: "subscriberCountText":{"simpleText":"530 subscribers"}
+  /"subscriberCountText"\s*:\s*\{\s*"simpleText"\s*:\s*"([^"]+)"/i,
+  // Legacy accessibility label variant
+  /"subscriberCountText"\s*:\s*\{[^}]*"accessibility"\s*:\s*\{[^}]*"label"\s*:\s*"([^"]+)"/i,
+  // Newer pageHeaderViewModel metadata rows: {"text":{"content":"530 subscribers"}}
+  /"text"\s*:\s*\{\s*"content"\s*:\s*"([\d.,\u00a0\s]+[KMBTkmbt]?\s*subscribers?)"\s*\}/i,
+  // Loosest fallback: any quoted "content" field mentioning subscribers
+  /"content"\s*:\s*"([\d.,\u00a0\s]+[KMBTkmbt]?\s*subscribers?)"/i,
+  // og/meta description sometimes carries it too, e.g. "1.2K subscribers • 12 videos"
+  /<meta[^>]+name="description"[^>]+content="([\d.,\u00a0\s]+[KMBTkmbt]?\s*subscribers?)/i
+]
+
 function extractSubscriberCount(html) {
-  const jsonMatch = /var ytInitialData = (\{.+?\});<\//s.exec(html)
-  if (jsonMatch) {
-    const found = parseSubscriberText(jsonMatch[1])
-    if (found) return parseCount(found)
+  for (const pattern of SUBSCRIBER_PATTERNS) {
+    const match = pattern.exec(html)
+    if (match) {
+      const count = parseCount(match[1])
+      if (count !== null) return count
+    }
   }
-
-  const embeddedMatch = /"subscriberCountText"\s*:\s*\{[^}]*"simpleText"\s*:\s*"([^"]+)"/i.exec(html)
-  if (embeddedMatch) return parseCount(embeddedMatch[1])
-
-  const labelMatch = /"subscriberCountText"\s*:\s*\{[^}]*"accessibility"\s*:\s*\{[^}]*"label"\s*:\s*"([^"]+)"/i.exec(html)
-  if (labelMatch) return parseCount(labelMatch[1])
-
   return null
+}
+
+function looksLikeConsentWall(html) {
+  return /consent\.youtube\.com/i.test(html) || /Before you continue to YouTube/i.test(html)
 }
 
 async function main() {
@@ -84,8 +90,13 @@ async function main() {
 
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; GitHubActions/1.0; +https://github.com)',
-      Accept: 'text/html,application/xhtml+xml'
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml',
+      'Accept-Language': 'en-US,en;q=0.9',
+      // Skips the EU/GDPR cookie-consent redirect page, which serves
+      // completely different HTML with no subscriber data in it.
+      Cookie: 'CONSENT=YES+1; SOCS=CAI'
     }
   })
 
@@ -94,9 +105,21 @@ async function main() {
   }
 
   const html = await response.text()
+
+  if (looksLikeConsentWall(html)) {
+    throw new Error(
+      'Received a cookie-consent page instead of the channel page. The Cookie header workaround may need updating.'
+    )
+  }
+
   const subscriberCount = extractSubscriberCount(html)
   if (subscriberCount === null) {
-    throw new Error('Unable to extract subscriber count from the YouTube channel page.')
+    // Log enough to diagnose without dumping the whole (large) page.
+    console.error(`Response length: ${html.length} chars`)
+    console.error(`Excerpt: ${html.slice(0, 300).replace(/\s+/g, ' ')}`)
+    throw new Error(
+      'Unable to extract subscriber count from the YouTube channel page. YouTube likely changed its markup again — see the excerpt above and update SUBSCRIBER_PATTERNS in this script.'
+    )
   }
 
   console.log(`Parsed subscriber count: ${subscriberCount}`)
