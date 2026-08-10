@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import process from 'process'
 
-const dataFile = path.resolve(process.cwd(), 'data/subscribers.json')
+const dataFile = path.resolve(process.cwd(), '../data/subscribers.json')
 
 function getChannelUrl() {
   const channelId = process.env.YOUTUBE_CHANNEL_ID?.trim()
