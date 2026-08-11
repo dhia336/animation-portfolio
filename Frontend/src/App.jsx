@@ -7,7 +7,7 @@ import { StaggeredMenu } from './reference_components/StaggeredMenu.jsx'
 import ScrollReveal from './reference_components/ScrollReveal.jsx'
 import ElectricBorder from './reference_components/ElectricBorder.jsx'
 import Shuffle from './Shuffle/Shuffle.jsx'
-import subscriberData from '../../data/subscribers.json'
+import subscriberData from '../data/subscribers.json'
 import './App.css'
 import logoSrc from '@root/assets/Logo.jpg'
 
