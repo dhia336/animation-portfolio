@@ -610,24 +610,36 @@ export default function DomeGallery({
     [enlargeTransitionMs, lockScroll, openedImageHeight, openedImageWidth, segments, unlockScroll]
   );
 
+  const openTileHref = useCallback(
+    (href, event) => {
+      if (!href) return false;
+      if (typeof onTileClick === 'function') {
+        const result = onTileClick({ href, event });
+        if (result === false) return true;
+      }
+      window.open(href, '_blank', 'noopener,noreferrer');
+      return true;
+    },
+    [onTileClick]
+  );
+
   const handleTileClick = useCallback(
     e => {
       const href = e.currentTarget.dataset.href;
-      if (href) {
-        openVideoOverlay(href);
-        return;
-      }
+      if (openTileHref(href, e)) return;
       if (draggingRef.current) return;
       if (movedRef.current) return;
       if (performance.now() - lastDragEndAt.current < 80) return;
       if (openingRef.current) return;
       openItemFromElement(e.currentTarget);
     },
-    [openItemFromElement, onTileClick]
+    [openItemFromElement, openTileHref]
   );
 
   const onTilePointerUp = useCallback(
     e => {
+      const href = e.currentTarget.dataset.href;
+      if (openTileHref(href, e)) return;
       if (e.pointerType !== 'touch') return;
       if (draggingRef.current) return;
       if (movedRef.current) return;
@@ -635,7 +647,7 @@ export default function DomeGallery({
       if (openingRef.current) return;
       openItemFromElement(e.currentTarget);
     },
-    [openItemFromElement]
+    [openItemFromElement, openTileHref]
   );
 
   useEffect(() => {

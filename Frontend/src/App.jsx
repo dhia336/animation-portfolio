@@ -316,13 +316,11 @@ function App() {
     }
   }, [reducedMotion])
 
-  // One-time GSAP intro timeline for the hero, first load only (per browser
-  // session — it won't replay on remounts within the same tab/session).
+  // Replay the hero intro each time the page loads so the front-of-page
+  // animation feels intentional and consistent on fresh visits.
   const heroRef = useRef(null)
   useEffect(() => {
     if (reducedMotion || !isReady || !heroRef.current) return
-    const alreadyPlayed = window.sessionStorage.getItem('heroIntroPlayed')
-    if (alreadyPlayed) return
 
     const ctx = gsap.context(() => {
       gsap.timeline({ defaults: { ease: 'power3.out' } })
@@ -333,7 +331,6 @@ function App() {
         .from('.js-hero-panel', { opacity: 0, y: 20, scale: 0.97, duration: 0.7 }, '-=0.5')
     }, heroRef)
 
-    window.sessionStorage.setItem('heroIntroPlayed', '1')
     return () => ctx.revert()
   }, [isReady, reducedMotion])
 
@@ -606,7 +603,8 @@ function App() {
             Commissions
           </ScrollReveal>
           <Reveal className="commissionCard">
-            <div>
+            <div className="commissionText">
+              <span className="sectionTag">Creative production</span>
               <h3>Bring your idea to motion</h3>
               <p>
                 I create fast-paced animation with a clean, kinetic line aesthetic. Available for short brand films,
@@ -638,11 +636,19 @@ function App() {
             Contact
           </ScrollReveal>
           <Reveal className="contactCard">
-            <p className="contactLead">Let’s animate your next campaign, brand sequence, or kinetic story.</p>
-            <p className="contactText">
-              Discord tag <strong>dhia0259</strong> — available for commissions, collabs, and custom motion work. Fast
-              replies for briefs and bookings.
-            </p>
+            <div className="contactBody">
+              <p className="contactLead">Let’s animate your next campaign, brand sequence, or kinetic story.</p>
+              <p className="contactText">
+                Discord tag <strong>dhia0259</strong> — available for commissions, collabs, and custom motion work. Fast
+                replies for briefs and bookings.
+              </p>
+            </div>
+            <div className="contactActions">
+              <a className="contactPill contactPill--primary" href={COMMISSIONS_URL} target="_blank" rel="noreferrer">
+                Book commission
+              </a>
+              <span className="contactPill contactPill--ghost">Discord: dhia0259</span>
+            </div>
           </Reveal>
         </footer>
       </main>
