@@ -1,8 +1,16 @@
-import { readFile, writeFile } from 'fs/promises'
+import { readFile, writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import process from 'process'
 
-const dataFile = path.resolve(process.cwd(), '../data/subscribers.json')
+// Resolve a repository-root-relative path for the subscribers JSON so this
+// script behaves the same whether it's invoked from the repo root or from
+// the `scripts/` directory (CI runners often run workflows from different
+// working directories). Allow overriding via `SUBSCRIBERS_JSON_PATH` env var.
+const scriptDir = path.dirname(new URL(import.meta.url).pathname)
+const repoRoot = path.resolve(scriptDir, '..')
+const dataFile = process.env.SUBSCRIBERS_JSON_PATH
+  ? path.resolve(process.env.SUBSCRIBERS_JSON_PATH)
+  : path.resolve(repoRoot, 'Frontend', 'data', 'subscribers.json')
 
 function getChannelUrl() {
   const channelId = process.env.YOUTUBE_CHANNEL_ID?.trim()
@@ -126,6 +134,10 @@ async function main() {
 
   const updatedAt = new Date().toISOString()
   const payload = { subscriberCount, updatedAt }
+
+  // Ensure the target directory exists before attempting to write.
+  const targetDir = path.dirname(dataFile)
+  await mkdir(targetDir, { recursive: true })
 
   await writeFile(dataFile, JSON.stringify(payload, null, 2) + '\n', 'utf8')
   console.log(`Updated ${dataFile}`)
