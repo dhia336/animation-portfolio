@@ -1,5 +1,6 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import gsap from 'gsap'
+import Lenis from '@studio-freight/lenis'
 import AsciiText from './reference_components/AsciiText.jsx'
 import Counter from './reference_components/Counter.jsx'
 import ClickSpark from './reference_components/ClickSpark.jsx'
@@ -182,6 +183,43 @@ function App() {
   const reducedMotion = usePrefersReducedMotion()
   const isMobile = bucket === 'mobile'
   const isCompact = bucket === 'mobile' || bucket === 'tablet'
+  const lenisRef = useRef(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smooth: true,
+      gestureDirection: 'vertical',
+      smoothTouch: true
+    })
+
+    lenisRef.current = lenis
+
+    function raf(time) {
+      lenis.raf(time)
+      requestAnimationFrame(raf)
+    }
+
+    requestAnimationFrame(raf)
+    return () => {
+      lenis.destroy()
+      lenisRef.current = null
+    }
+  }, [])
+
+  const handleMenuLinkClick = useCallback((link) => {
+    if (!link?.startsWith('#')) return
+    const target = document.querySelector(link)
+    if (target) {
+      lenisRef.current?.scrollTo(target, {
+        duration: 1.2,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t))
+      })
+    }
+  }, [])
 
   const [videoItems, setVideoItems] = useState(
     VIDEO_IDS.map((id, index) => ({
@@ -376,6 +414,7 @@ function App() {
         changeMenuColorOnOpen={true}
         accentColor="#ff3d47"
         isFixed={true}
+        onMenuItemClick={handleMenuLinkClick}
       />
 
       <main className="page">
@@ -486,7 +525,8 @@ function App() {
             <Reveal className="galleryWrap">
               <Suspense fallback={<div className="galleryFallback">Loading showcase…</div>}>
                 <DomeGallery
-                  images={videoItems.map((item) => ({ src: item.thumbnail, alt: item.title }))}
+                  images={videoItems.map((item) => ({ src: item.thumbnail, alt: item.title, href: item.href }))}
+                  onTileClick={({ href }) => href && window.open(href, '_blank', 'noreferrer')}
                   fit={0.8}
                   fitBasis="min"
                   imageBorderRadius="20px"

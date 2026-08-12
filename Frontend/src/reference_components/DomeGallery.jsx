@@ -73,7 +73,11 @@ function buildItems(pool, seg) {
     if (typeof image === 'string') {
       return { src: image, alt: '' };
     }
-    return { src: image.src || '', alt: image.alt || '' };
+    return {
+      src: image.src || '',
+      alt: image.alt || '',
+      href: image.href || ''
+    };
   });
 
   const usedImages = Array.from({ length: totalSlots }, (_, i) => normalizedImages[i % normalizedImages.length]);
@@ -122,7 +126,8 @@ export default function DomeGallery({
   openedImageHeight = '350px',
   imageBorderRadius = '30px',
   openedImageBorderRadius = '30px',
-  grayscale = true
+  grayscale = true,
+  onTileClick
 }) {
   const rootRef = useRef(null);
   const mainRef = useRef(null);
@@ -353,6 +358,16 @@ export default function DomeGallery({
       const el = focusedElRef.current;
       if (!el) return;
       const parent = el.parentElement;
+      // Prefer video overlay first, then image enlarge overlay
+      const videoOverlay = viewerRef.current?.querySelector('.video-overlay');
+      if (videoOverlay) {
+        // close video overlay
+        videoOverlay.remove();
+        focusedElRef.current = null;
+        openingRef.current = false;
+        unlockScroll();
+        return;
+      }
       const overlay = viewerRef.current?.querySelector('.enlarge');
       if (!overlay) return;
       const refDiv = parent.querySelector('.item__image--reference');
@@ -445,6 +460,41 @@ export default function DomeGallery({
       window.removeEventListener('keydown', onKey);
     };
   }, [enlargeTransitionMs, unlockScroll]);
+
+  // Open a YouTube iframe overlay inside the viewer
+  const openVideoOverlay = useCallback(
+    (href) => {
+      if (!viewerRef.current) return;
+      const idMatch = (href || '').match(/(?:v=|\/embed\/|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+      const id = idMatch ? idMatch[1] : null;
+      const src = id ? `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&showinfo=0` : href;
+      lockScroll();
+      const vid = document.createElement('div');
+      vid.className = 'video-overlay';
+      vid.style.position = 'absolute';
+      vid.style.left = '50%';
+      vid.style.top = '50%';
+      vid.style.transform = 'translate(-50%, -50%)';
+      vid.style.width = 'min(960px, 90vw)';
+      vid.style.height = 'min(540px, 60vh)';
+      vid.style.zIndex = '9999';
+      vid.style.borderRadius = '14px';
+      vid.style.overflow = 'hidden';
+      vid.style.boxShadow = '0 30px 80px rgba(0,0,0,0.7)';
+      const iframe = document.createElement('iframe');
+      iframe.src = src;
+      iframe.width = '100%';
+      iframe.height = '100%';
+      iframe.frameBorder = '0';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+      iframe.allowFullscreen = true;
+      vid.appendChild(iframe);
+      viewerRef.current.appendChild(vid);
+      openingRef.current = true;
+      focusedElRef.current = vid;
+    },
+    [lockScroll]
+  );
 
   const openItemFromElement = useCallback(
     el => {
@@ -560,15 +610,20 @@ export default function DomeGallery({
     [enlargeTransitionMs, lockScroll, openedImageHeight, openedImageWidth, segments, unlockScroll]
   );
 
-  const onTileClick = useCallback(
+  const handleTileClick = useCallback(
     e => {
+      const href = e.currentTarget.dataset.href;
+      if (href) {
+        openVideoOverlay(href);
+        return;
+      }
       if (draggingRef.current) return;
       if (movedRef.current) return;
       if (performance.now() - lastDragEndAt.current < 80) return;
       if (openingRef.current) return;
       openItemFromElement(e.currentTarget);
     },
-    [openItemFromElement]
+    [openItemFromElement, onTileClick]
   );
 
   const onTilePointerUp = useCallback(
@@ -626,7 +681,8 @@ export default function DomeGallery({
                   role="button"
                   tabIndex={0}
                   aria-label={it.alt || 'Open image'}
-                  onClick={onTileClick}
+                  data-href={it.href || ''}
+                  onClick={handleTileClick}
                   onPointerUp={onTilePointerUp}
                 >
                   <img src={it.src} draggable={false} alt={it.alt} />

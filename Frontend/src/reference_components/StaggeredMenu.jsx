@@ -18,7 +18,8 @@ export const StaggeredMenu = ({
   isFixed = false,
   closeOnClickAway = true,
   onMenuOpen,
-  onMenuClose
+  onMenuClose,
+  onMenuItemClick
 }) => {
   const [open, setOpen] = useState(false);
   const openRef = useRef(false);
@@ -410,7 +411,19 @@ export const StaggeredMenu = ({
             {items && items.length ? (
               items.map((it, idx) => (
                 <li className="sm-panel-itemWrap" key={it.label + idx}>
-                  <a className="sm-panel-item" href={it.link} aria-label={it.ariaLabel} data-index={idx + 1}>
+                  <a
+                    className="sm-panel-item"
+                    href={it.link}
+                    aria-label={it.ariaLabel}
+                    data-index={idx + 1}
+                    onClick={(event) => {
+                      if (onMenuItemClick) {
+                        event.preventDefault()
+                        onMenuItemClick(it.link)
+                      }
+                      closeMenu()
+                    }}
+                  >
                     <span className="sm-panel-itemLabel">{it.label}</span>
                   </a>
                 </li>
