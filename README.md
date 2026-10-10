@@ -1,72 +1,45 @@
 # Animation Portfolio
 
-## Live demo: https://animation-portfolio-inky.vercel.app/
+A personal motion-design portfolio built with React and Vite. It combines animated typography, an interactive gallery, smooth scrolling, and GSAP-based entrance animations.
 
-A personal motion portfolio showcasing kinetic motion design and short animated experiments. Built with Vite + React and featuring a few custom visual components and integrations:
+**Live demo:** https://animation-portfolio-inky.vercel.app/
 
-- Hero title using a Shuffle text animation (pixel font).
-- DomeGallery: 3D circular thumbnail gallery.
-- Lenis smooth scrolling and GSAP-powered entrance animations.
-- Dynamic subscriber count sourced from `Frontend/data/subscribers.json` (automated by `scripts/update-subscribers.js`).
+## Features
+
+- Animated hero typography
+- Interactive gallery with drag gestures
+- Smooth scrolling and entrance animations
+- Subscriber-count data loaded from a JSON file
+- Responsive frontend built with custom CSS
 
 ## Tech stack
-- React (Vite)
-- GSAP, Lenis
-- @use-gesture/react for gallery drag
-- Plain CSS + custom components in `Frontend/src`
-- React Blits (componnents)
 
-## Quick start (development)
+- React and Vite
+- GSAP and Lenis
+- Three.js and @use-gesture/react
+- Plain CSS
 
-1. Install dependencies
+## Run locally
 
-```bash
-cd Frontend
-npm install
-```
+    cd Frontend
+    npm install
+    npm run dev
 
-2. Run the dev server
+## Build
 
-```bash
-npm run dev
-```
+    npm run build
+    npm run preview
 
-3. Build for production
-
-```bash
-npm run build
-```
+Vite writes the production build to Frontend/dist/.
 
 ## Subscriber count updater
 
-The repository includes a small script at `scripts/update-subscribers.js` which scrapes YouTube channel pages to extract the subscriber count and writes it to `Frontend/data/subscribers.json`.
+The repository includes scripts/update-subscribers.js, which attempts to retrieve a YouTube channel's subscriber count and writes the result to Frontend/data/subscribers.json.
 
-## Usage examples:
+    YOUTUBE_CHANNEL_ID="YOUR_CHANNEL_ID" node scripts/update-subscribers.js
 
-```bash
-# Using a channel ID
-YOUTUBE_CHANNEL_ID="UCxxxxxxx" node scripts/update-subscribers.js
-
-# Using a channel URL
-YOUTUBE_CHANNEL_URL="https://www.youtube.com/channel/UCxxxxxxx" node scripts/update-subscribers.js
-
-# Override output path (optional)
-SUBSCRIBERS_JSON_PATH="/absolute/path/to/Frontend/data/subscribers.json" YOUTUBE_CHANNEL_ID="UCxxxxxxx" node scripts/update-subscribers.js
-```
-
-## Notes
-- The script will create the `Frontend/data` directory if it doesn't exist.
-- If YouTube changes layout/markup, the script may need pattern adjustments (see `SUBSCRIBER_PATTERNS` in the script).
+This script depends on YouTube page markup and may need maintenance if that markup changes. Do not treat the displayed count as live unless the updater is run successfully.
 
 ## Deployment
-- The live site is hosted on Vercel (see the provided demo link). The project is ready for Vercel deployment from the `Frontend` folder—set the build command to `npm run build` and the output directory to `dist`.
 
-## Project structure (important files)
-- `Frontend/` — React app (entry point: `Frontend/src/App.jsx`)
-- `scripts/update-subscribers.js` — subscriber updater script
-- `Frontend/data/subscribers.json` — runtime subscriber value (generated)
-
-
-## Credit
-
-React Blits (for cool componnents)
+The live demo is hosted on Vercel. For a new Vercel project, set Frontend as the root directory and use npm run build as the build command.
